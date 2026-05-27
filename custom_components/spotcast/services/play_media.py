@@ -113,7 +113,7 @@ async def async_play_media(hass: HomeAssistant, call: ServiceCall):
     )
 
     await account.async_play_media(media_player.id, uri, **extras)
-    await account.async_apply_extras(media_player.id, extras)
+    await account.async_apply_extras(media_player.id, extras, uri=uri)
 
 
 async def async_episode_index(

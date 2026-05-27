@@ -198,6 +198,7 @@ class SpotifyAccount:
             f"spotcast_{entry_id}_last_state",
         )
         self.current_item = {"uri": None, "audio_features": {}}
+        self.audio_features_supported = True
 
         for name, dataset in self.DATASETS.items():
             refresh_rate = dataset["refresh_factor"] * self._base_refresh_rate
@@ -743,6 +744,9 @@ class SpotifyAccount:
 
     async def async_track_features(self, uri: str) -> dict:
         """Returns the track audio features."""
+        if not getattr(self, "audio_features_supported", True):
+            return {}
+
         if uri is None or not uri.startswith("spotify:track:"):
             return {}
 
@@ -753,7 +757,8 @@ class SpotifyAccount:
             )
             return response[0] or {}
         except SpotifyException as exc:
-            LOGGER.debug("Could not fetch audio features for %s: %s", uri, exc.msg)
+            LOGGER.warning("Audio features endpoint returned an error (likely due to Spotify API February 2026 restrictions). Disabling audio features fetching for this session to prevent log spam: %s", exc)
+            self.audio_features_supported = False
             return {}
 
     async def async_playlists_count(self) -> int:
@@ -858,10 +863,43 @@ class SpotifyAccount:
             f"device `{device_id}` still not available after {timeout} sec."
         )
 
+    async def async_wait_for_playback_start(self, uri: str, timeout: float = 5.0) -> None:
+        """Wait for the playback context to transition to the new URI."""
+        if not uri:
+            return
+
+        LOGGER.debug("Waiting for playback to transition to `%s`", uri)
+        end_time = time() + timeout
+
+        while time() < end_time:
+            try:
+                state = await self.hass.async_add_executor_job(
+                    self.apis["public"].current_playback,
+                    self.country,
+                    "episode",
+                )
+                if state:
+                    context = state.get("context") or {}
+                    context_uri = context.get("uri")
+                    item = state.get("item") or {}
+                    item_uri = item.get("uri")
+
+                    if context_uri == uri or item_uri == uri:
+                        LOGGER.debug("Playback successfully transitioned to `%s`", uri)
+                        return
+            except SpotifyException as exc:
+                LOGGER.debug("Error while waiting for playback transition: %s", exc)
+
+            await sleep(0.5)
+
+        LOGGER.debug("Timed out waiting for playback to transition to `%s`", uri)
+
     async def async_apply_extras(
         self,
         device_id: str,
         extras: dict,
+        uri: str = None,
+        uris: list[str] = None,
     ):
         """Applies extra settings on an account.
 
@@ -869,7 +907,24 @@ class SpotifyAccount:
             account(SpotifyAccount): the account to apply extras to
             device_id(str): the device to set the extras to
             extras(dict): the extra settings to apply
+            uri(str, optional): the target context URI
+            uris(list[str], optional): the list of tracks
         """
+        target_uri = uri
+        if not target_uri and uris:
+            offset = extras.get("offset")
+            if isinstance(offset, dict):
+                index = offset.get("position", 0)
+            elif isinstance(offset, int):
+                index = offset
+            else:
+                index = 0
+            if 0 <= index < len(uris):
+                target_uri = uris[index]
+
+        if "shuffle" in extras or "repeat" in extras:
+            await self.async_wait_for_playback_start(target_uri)
+
         actions = {
             "volume": self.async_set_volume,
             "shuffle": self.async_shuffle,

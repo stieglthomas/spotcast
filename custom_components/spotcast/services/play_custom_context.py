@@ -85,4 +85,4 @@ async def async_play_custom_context(hass: HomeAssistant, call: ServiceCall):
         extras["offset"] = randint(0, len(tracks)-1)
 
     await account.async_play_media(media_player.id, uris=tracks, **extras)
-    await account.async_apply_extras(media_player.id, extras)
+    await account.async_apply_extras(media_player.id, extras, uris=tracks)
