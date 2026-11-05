@@ -5,10 +5,10 @@ from logging import getLogger
 from homeassistant.components.sensor import (
     SensorStateClass,
     SensorEntityDescription,
-    EntityCategory,
     SensorEntity,
     SensorDeviceClass,
 )
+from homeassistant.const import EntityCategory
 
 from custom_components.spotcast.spotify import SpotifyAccount
 from custom_components.spotcast.sensor.abstract_entity import SpotcastEntity

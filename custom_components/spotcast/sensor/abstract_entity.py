@@ -4,7 +4,8 @@ from abc import ABC, abstractmethod
 from logging import getLogger
 from asyncio import exceptions as asyncio_errors
 
-from homeassistant.components.sensor import EntityCategory, Entity
+from homeassistant.const import EntityCategory
+from homeassistant.helpers.entity import Entity
 from homeassistant.const import STATE_UNKNOWN, STATE_OFF
 from requests import exceptions as requests_errors
 
